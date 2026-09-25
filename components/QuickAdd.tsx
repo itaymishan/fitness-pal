@@ -87,10 +87,16 @@ export default function QuickAdd({ open, onClose, onPick, userId, date, mealType
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center">
-      <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white p-5 sm:rounded-2xl">
+      <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:rounded-2xl">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-bold">⚡ Quick add</h2>
-          <button onClick={onClose} className="rounded-full bg-gray-100 px-3 py-1 text-sm">✕</button>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-100 text-sm"
+          >
+            ✕
+          </button>
         </div>
 
         <button
@@ -107,7 +113,7 @@ export default function QuickAdd({ open, onClose, onPick, userId, date, mealType
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`flex-1 rounded-xl py-2 text-sm font-medium capitalize ${
+              className={`min-h-[44px] flex-1 rounded-xl py-2.5 text-sm font-medium capitalize ${
                 tab === t ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600"
               }`}
             >
@@ -135,13 +141,13 @@ export default function QuickAdd({ open, onClose, onPick, userId, date, mealType
                   fat_g: Number(f.fat_g),
                 })
               }
-              className="flex w-full items-center justify-between rounded-xl border border-gray-200 px-4 py-3 text-left"
+              className="flex w-full items-center justify-between gap-3 rounded-xl border border-gray-200 px-4 py-3 text-left"
             >
-              <div>
-                <div className="font-medium">{f.name}</div>
-                {f.quantity && <div className="text-xs text-gray-500">{f.quantity}</div>}
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-medium">{f.name}</div>
+                {f.quantity && <div className="truncate text-xs text-gray-500">{f.quantity}</div>}
               </div>
-              <div className="text-sm text-gray-500">{Math.round(Number(f.calories))} kcal</div>
+              <div className="shrink-0 text-sm text-gray-500">{Math.round(Number(f.calories))} kcal</div>
             </button>
           ))}
         </div>

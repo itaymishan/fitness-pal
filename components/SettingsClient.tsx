@@ -70,6 +70,7 @@ export default function SettingsClient() {
 
   return (
     <main className="px-4 pt-4">
+      <div className="mx-auto w-full max-w-xl">
       <h1 className="text-xl font-bold">⚙️ Settings</h1>
 
       <section className="mt-4 rounded-2xl bg-white p-4 shadow-sm">
@@ -83,7 +84,7 @@ export default function SettingsClient() {
                 inputMode="numeric"
                 value={targets[key]}
                 onChange={(e) => setTargets((t) => ({ ...t, [key]: e.target.value }))}
-                className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-2.5 outline-none focus:border-emerald-600"
+                className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-emerald-600"
               />
             </label>
           ))}
@@ -98,7 +99,7 @@ export default function SettingsClient() {
       </section>
 
       <section className="mt-3 rounded-2xl bg-white p-4 shadow-sm">
-        <div className="text-sm text-gray-500">
+        <div className="break-words text-sm text-gray-500">
           Signed in as <span className="font-medium text-gray-800">{email}</span>
         </div>
         <button
@@ -108,6 +109,7 @@ export default function SettingsClient() {
           Sign out
         </button>
       </section>
+      </div>
     </main>
   );
 }

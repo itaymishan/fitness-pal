@@ -88,7 +88,7 @@ export default function SignupPage() {
               <button
                 type="button"
                 onClick={() => setShow((s) => !s)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-medium text-gray-500"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-500"
               >
                 {show ? "Hide" : "Show"}
               </button>

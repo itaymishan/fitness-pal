@@ -11,12 +11,25 @@
 html,
 body {
   height: 100%;
+  overflow-x: clip;
+}
+
+html {
+  background: #f6f7f9;
 }
 
 body {
   background: #f6f7f9;
   color: #111827;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Visible keyboard focus for buttons and links (inputs already show a focus ring/border). */
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid #059669;
+  outline-offset: 2px;
+  border-radius: 6px;
 }
 
 /* Bigger touch targets on mobile */

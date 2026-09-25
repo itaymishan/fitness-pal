@@ -111,7 +111,7 @@ export default function HistoryClient() {
         <h1 className="text-xl font-bold">📈 History & Trends</h1>
         <button
           onClick={exportCSV}
-          className="rounded-full bg-white px-4 py-2 text-xs font-semibold shadow-sm"
+          className="min-h-[44px] rounded-full bg-white px-4 py-2.5 text-xs font-semibold shadow-sm"
         >
           ⬇ CSV
         </button>
@@ -122,7 +122,7 @@ export default function HistoryClient() {
           <button
             key={r.key}
             onClick={() => setRange(r.key)}
-            className={`rounded-xl py-2 text-sm font-medium ${
+            className={`min-h-[44px] rounded-xl py-2.5 text-sm font-medium ${
               range === r.key ? "bg-gray-900 text-white" : "bg-white text-gray-600 shadow-sm"
             }`}
           >
@@ -149,46 +149,47 @@ export default function HistoryClient() {
             ))}
           </section>
 
-          {/* calories chart */}
-          <section className="mt-3 rounded-2xl bg-white p-4 shadow-sm">
-            <h2 className="mb-2 text-sm font-bold">Calories vs target</h2>
-            <div className="h-56">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={series} margin={{ top: 4, right: 4, left: -18, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={Math.ceil(rangeDays / 8)} />
-                  <YAxis tick={{ fontSize: 10 }} />
-                  <Tooltip />
-                  <ReferenceLine
-                    y={profile.calorie_target}
-                    stroke="#059669"
-                    strokeDasharray="4 4"
-                    label={{ value: "target", fontSize: 10, fill: "#059669" }}
-                  />
-                  <Bar dataKey="calories" fill="#10b981" radius={[3, 3, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </section>
+          {/* calories + macros charts: side by side on desktop */}
+          <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+            <section className="rounded-2xl bg-white p-4 shadow-sm">
+              <h2 className="mb-2 text-sm font-bold">Calories vs target</h2>
+              <div className="h-56 lg:h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={series} margin={{ top: 4, right: 4, left: -18, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={Math.ceil(rangeDays / 8)} />
+                    <YAxis tick={{ fontSize: 10 }} />
+                    <Tooltip />
+                    <ReferenceLine
+                      y={profile.calorie_target}
+                      stroke="#059669"
+                      strokeDasharray="4 4"
+                      label={{ value: "target", fontSize: 10, fill: "#059669" }}
+                    />
+                    <Bar dataKey="calories" fill="#10b981" radius={[3, 3, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
 
-          {/* macros chart */}
-          <section className="mt-3 rounded-2xl bg-white p-4 shadow-sm">
-            <h2 className="mb-2 text-sm font-bold">Protein / carbs / fat (g)</h2>
-            <div className="h-56">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={series} margin={{ top: 4, right: 4, left: -18, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={Math.ceil(rangeDays / 8)} />
-                  <YAxis tick={{ fontSize: 10 }} />
-                  <Tooltip />
-                  <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <Line type="monotone" dataKey="protein" stroke="#0ea5e9" dot={false} strokeWidth={2} />
-                  <Line type="monotone" dataKey="carbs" stroke="#f59e0b" dot={false} strokeWidth={2} />
-                  <Line type="monotone" dataKey="fat" stroke="#f43f5e" dot={false} strokeWidth={2} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </section>
+            <section className="rounded-2xl bg-white p-4 shadow-sm">
+              <h2 className="mb-2 text-sm font-bold">Protein / carbs / fat (g)</h2>
+              <div className="h-56 lg:h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={series} margin={{ top: 4, right: 4, left: -18, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={Math.ceil(rangeDays / 8)} />
+                    <YAxis tick={{ fontSize: 10 }} />
+                    <Tooltip />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Line type="monotone" dataKey="protein" stroke="#0ea5e9" dot={false} strokeWidth={2} />
+                    <Line type="monotone" dataKey="carbs" stroke="#f59e0b" dot={false} strokeWidth={2} />
+                    <Line type="monotone" dataKey="fat" stroke="#f43f5e" dot={false} strokeWidth={2} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
+          </div>
 
           {/* day list -> jump to diary */}
           <section className="mt-3 rounded-2xl bg-white p-4 shadow-sm">
@@ -201,10 +202,10 @@ export default function HistoryClient() {
                   <li key={s.date}>
                     <Link
                       href={`/diary?date=${s.date}`}
-                      className="flex items-center justify-between py-2.5"
+                      className="flex items-center justify-between gap-2 py-2.5"
                     >
-                      <span className="text-sm font-medium">{prettyDate(s.date)}</span>
-                      <span className="text-sm text-gray-500">
+                      <span className="min-w-0 truncate text-sm font-medium">{prettyDate(s.date)}</span>
+                      <span className="shrink-0 text-sm text-gray-500">
                         {s.calories} kcal · {s.protein}p/{s.carbs}c/{s.fat}f
                       </span>
                     </Link>

@@ -123,7 +123,8 @@ export default function DiaryClient() {
       <div className="mb-3 flex items-center justify-between">
         <button
           onClick={() => goDate(addDaysISO(date, -1))}
-          className="rounded-full bg-white px-4 py-2 text-sm font-medium shadow-sm"
+          aria-label="Previous day"
+          className="min-h-[44px] rounded-full bg-white px-5 py-2.5 text-sm font-medium shadow-sm"
         >
           ←
         </button>
@@ -138,7 +139,8 @@ export default function DiaryClient() {
         <button
           onClick={() => goDate(addDaysISO(date, 1))}
           disabled={date >= todayISO()}
-          className="rounded-full bg-white px-4 py-2 text-sm font-medium shadow-sm disabled:opacity-40"
+          aria-label="Next day"
+          className="min-h-[44px] rounded-full bg-white px-5 py-2.5 text-sm font-medium shadow-sm disabled:opacity-40"
         >
           →
         </button>
@@ -148,62 +150,67 @@ export default function DiaryClient() {
         <div className="py-16 text-center text-sm text-gray-400">Loading…</div>
       ) : (
         <>
-          <TotalsHeader totals={totals} profile={profile} />
+          <div className="lg:grid lg:grid-cols-5 lg:items-start lg:gap-6">
+            <div className="lg:col-span-2 lg:sticky lg:top-4">
+              <TotalsHeader totals={totals} profile={profile} />
 
-          {/* smart entry CTA */}
-          <button
-            onClick={() => {
-              setSmartMeal("breakfast");
-              setSmartOpen(true);
-            }}
-            className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-gray-900 py-3 text-sm font-semibold text-white"
-          >
-            ✨ Smart log — describe or dictate a meal
-          </button>
+              {/* smart entry CTA */}
+              <button
+                onClick={() => {
+                  setSmartMeal("breakfast");
+                  setSmartOpen(true);
+                }}
+                className="mt-3 flex min-h-[48px] w-full items-center justify-center gap-2 rounded-2xl bg-gray-900 px-4 py-3 text-sm font-semibold text-white"
+              >
+                ✨ Smart log — describe or dictate a meal
+              </button>
+            </div>
 
-          <div className="mt-4 space-y-4">
-            {MEAL_TYPES.map((t) => {
-              const meal = mealsByType.get(t);
-              const items = meal?.items ?? [];
-              const mt: DayTotals = items.reduce((a, it) => addTotals(a, itemTotals(it)), { ...EMPTY_TOTALS });
-              return (
-                <section key={t} className="rounded-2xl bg-white p-4 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <h2 className="font-bold">
-                      {MEAL_LABELS[t]}
-                      <span className="ml-2 text-xs font-normal text-gray-500">
-                        {Math.round(mt.calories)} kcal · {round1(mt.protein_g)}p / {round1(mt.carbs_g)}c / {round1(mt.fat_g)}f
-                      </span>
-                    </h2>
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() => {
-                          setQuickMeal(t);
-                          setQuickOpen(true);
-                        }}
-                        title="Quick add"
-                        className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium"
-                      >
-                        ⚡
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSmartMeal(t);
-                          setSmartOpen(true);
-                        }}
-                        title="Smart log"
-                        className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium"
-                      >
-                        ✨
-                      </button>
-                      <button
-                        onClick={() => openAdd(t)}
-                        className="rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white"
-                      >
-                        + Add
-                      </button>
+            <div className="mt-4 space-y-4 lg:col-span-3 lg:mt-0">
+              {MEAL_TYPES.map((t) => {
+                const meal = mealsByType.get(t);
+                const items = meal?.items ?? [];
+                const mt: DayTotals = items.reduce((a, it) => addTotals(a, itemTotals(it)), { ...EMPTY_TOTALS });
+                return (
+                  <section key={t} className="rounded-2xl bg-white p-4 shadow-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h2 className="min-w-0 font-bold">
+                        {MEAL_LABELS[t]}
+                        <span className="ml-2 text-xs font-normal text-gray-500">
+                          {Math.round(mt.calories)} kcal · {round1(mt.protein_g)}p / {round1(mt.carbs_g)}c / {round1(mt.fat_g)}f
+                        </span>
+                      </h2>
+                      <div className="flex shrink-0 gap-1.5">
+                        <button
+                          onClick={() => {
+                            setQuickMeal(t);
+                            setQuickOpen(true);
+                          }}
+                          title="Quick add"
+                          aria-label={`Quick add to ${MEAL_LABELS[t]}`}
+                          className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full bg-gray-100 px-3 py-2 text-xs font-medium"
+                        >
+                          ⚡
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSmartMeal(t);
+                            setSmartOpen(true);
+                          }}
+                          title="Smart log"
+                          aria-label={`Smart log to ${MEAL_LABELS[t]}`}
+                          className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full bg-gray-100 px-3 py-2 text-xs font-medium"
+                        >
+                          ✨
+                        </button>
+                        <button
+                          onClick={() => openAdd(t)}
+                          className="min-h-[44px] rounded-full bg-emerald-600 px-4 py-2 text-xs font-semibold text-white"
+                        >
+                          + Add
+                        </button>
+                      </div>
                     </div>
-                  </div>
 
                   {items.length === 0 ? (
                     <p className="mt-2 text-sm text-gray-400">Nothing logged yet.</p>
@@ -227,12 +234,22 @@ export default function DiaryClient() {
                               {round1(Number(it.carbs_g))}c/{round1(Number(it.fat_g))}f
                             </div>
                           </div>
-                          <button onClick={() => openEdit(it)} className="px-2 text-sm text-gray-400">
-                            ✏️
-                          </button>
-                          <button onClick={() => deleteItem(it)} className="px-2 text-sm text-gray-400">
-                            🗑️
-                          </button>
+                          <div className="flex shrink-0 gap-1">
+                            <button
+                              onClick={() => openEdit(it)}
+                              aria-label={`Edit ${it.name}`}
+                              className="flex h-11 w-11 items-center justify-center text-sm text-gray-400"
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              onClick={() => deleteItem(it)}
+                              aria-label={`Delete ${it.name}`}
+                              className="flex h-11 w-11 items-center justify-center text-sm text-gray-400"
+                            >
+                              🗑️
+                            </button>
+                          </div>
                         </li>
                       ))}
                     </ul>
@@ -240,6 +257,7 @@ export default function DiaryClient() {
                 </section>
               );
             })}
+            </div>
           </div>
         </>
       )}

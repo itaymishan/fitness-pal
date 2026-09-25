@@ -132,10 +132,16 @@ export default function SmartEntry({ open, onClose, onSaved, userId, date, defau
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center">
-      <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white p-5 sm:rounded-2xl">
+      <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:rounded-2xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-bold">✨ Smart log</h2>
-          <button onClick={onClose} className="rounded-full bg-gray-100 px-3 py-1 text-sm">✕</button>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-100 text-sm"
+          >
+            ✕
+          </button>
         </div>
 
         <div className="flex gap-2">
@@ -224,7 +230,7 @@ export default function SmartEntry({ open, onClose, onSaved, userId, date, defau
                   <button
                     key={t}
                     onClick={() => setMealType(t)}
-                    className={`rounded-xl border py-2 text-xs font-medium ${
+                    className={`min-h-[44px] rounded-xl border py-2.5 text-xs font-medium ${
                       mealType === t
                         ? "border-emerald-600 bg-emerald-50 text-emerald-800"
                         : "border-gray-200 text-gray-600"

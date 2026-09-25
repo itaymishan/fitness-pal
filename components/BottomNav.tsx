@@ -14,7 +14,7 @@ export default function BottomNav() {
   const pathname = usePathname();
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-gray-200 bg-white/95 backdrop-blur">
-      <div className="mx-auto grid max-w-lg grid-cols-4">
+      <div className="mx-auto grid max-w-lg grid-cols-4 md:max-w-2xl lg:max-w-5xl">
         {TABS.map((t) => {
           const active =
             pathname === t.href || pathname.startsWith(t.href + "/");
