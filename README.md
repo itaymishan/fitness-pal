@@ -28,11 +28,17 @@ npm run build                # production build (must pass before deploy)
    - `favorites` — saved foods for quick add
    - Row Level Security policies so users only ever touch their own rows
    - the private `meal-photos` storage bucket + per-user storage policies
-3. **Authentication → Sign In / Sign Up:** enable **Email** provider. Magic
-   (OTP) links are on by default — no extra config needed. Under
+3. **Authentication → Sign In / Sign Up:** enable the **Email** provider.
+   The app supports email+password signup/login, password reset, and magic
+   (OTP) links — all of them need the Email provider on. If **Confirm email**
+   is enabled (recommended), new signups receive a confirmation link before
+   they can sign in; if it's off, signup signs the user in immediately. Under
    **Authentication → URL Configuration**, add your production URL
-   (e.g. `https://your-app.vercel.app`) to **Redirect URLs** so the magic link
-   can return to `/auth/callback`.
+   (e.g. `https://your-app.vercel.app`) to **Redirect URLs** — the signup
+   confirmation, magic-link, and password-reset emails all return to
+   `/auth/callback`, which then routes recovery flows to `/auth/reset` and
+   everything else to `/diary`. For local dev, `http://localhost:3000` is
+   allowed by default.
 4. Copy your **Project URL** and **anon public key** from
    **Project Settings → API** into `.env.local`:
    - `NEXT_PUBLIC_SUPABASE_URL`
@@ -51,11 +57,12 @@ npm run build                # production build (must pass before deploy)
 4. **Deploy.** No build settings changes needed (`npm run build`).
 
 After deploy, add the Vercel URL to Supabase **Redirect URLs** (step 3 above)
-so magic-link sign-in works in production.
+so signup confirmation, magic-link, and password-reset emails work in production.
 
 ## How it works
 
-- **Auth:** passwordless email magic link. `proxy.ts` (Next.js 16's renamed
+- **Auth:** email+password signup/login, password reset, and passwordless
+  email magic link. `proxy.ts` (Next.js 16's renamed
   `middleware`) refreshes the Supabase session on every request and redirects
   unauthenticated visitors to `/login`.
 - **Data:** all reads/writes go through the browser Supabase client; Postgres
