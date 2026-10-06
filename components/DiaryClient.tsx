@@ -27,6 +27,7 @@ import TotalsHeader from "@/components/TotalsHeader";
 import EntryModal, { type EntryDraft } from "@/components/EntryModal";
 import SmartEntry from "@/components/SmartEntry";
 import QuickAdd from "@/components/QuickAdd";
+import ScanModal from "@/components/ScanModal";
 
 const DEFAULT_PROFILE: Profile = {
   id: "",
@@ -59,6 +60,8 @@ export default function DiaryClient() {
   const [smartMeal, setSmartMeal] = useState<MealType>("breakfast");
   const [quickOpen, setQuickOpen] = useState(false);
   const [quickMeal, setQuickMeal] = useState<MealType>("breakfast");
+  const [scanOpen, setScanOpen] = useState(false);
+  const [scanMeal, setScanMeal] = useState<MealType>("breakfast");
 
   const load = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -204,6 +207,17 @@ export default function DiaryClient() {
                           ✨
                         </button>
                         <button
+                          onClick={() => {
+                            setScanMeal(t);
+                            setScanOpen(true);
+                          }}
+                          title="Scan barcode"
+                          aria-label={`Scan barcode to ${MEAL_LABELS[t]}`}
+                          className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full bg-gray-100 px-3 py-2 text-xs font-medium"
+                        >
+                          📷
+                        </button>
+                        <button
                           onClick={() => openAdd(t)}
                           className="min-h-[44px] rounded-full bg-emerald-600 px-4 py-2 text-xs font-semibold text-white"
                         >
@@ -273,6 +287,20 @@ export default function DiaryClient() {
             item={editingItem}
             defaults={entryDefaults}
             existingPhotoUrl={editingItem?.photo_url ? photoUrls.get(editingItem.photo_url) ?? null : null}
+          />
+          <ScanModal
+            open={scanOpen}
+            onClose={() => setScanOpen(false)}
+            mealType={scanMeal}
+            onDone={(draft, photoFile) => {
+              setScanOpen(false);
+              getOrCreateMeal(supabase, userId, date, scanMeal).then((mealId) => {
+                setEntryMealId(mealId);
+                setEditingItem(null);
+                setEntryDefaults({ ...draft, photoFile });
+                setEntryOpen(true);
+              });
+            }}
           />
           <SmartEntry
             open={smartOpen}

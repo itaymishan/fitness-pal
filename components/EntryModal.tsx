@@ -13,6 +13,8 @@ export interface EntryDraft {
   carbs_g?: number;
   fat_g?: number;
   notes?: string | null;
+  /** photo to attach (e.g. a scanned nutrition label); overrides the file picker */
+  photoFile?: File | null;
 }
 
 interface Props {
@@ -65,7 +67,7 @@ export default function EntryModal({
     setCarbs(src?.carbs_g != null && src.carbs_g !== 0 ? String(src.carbs_g) : "");
     setFat(src?.fat_g != null && src.fat_g !== 0 ? String(src.fat_g) : "");
     setNotes(src && "notes" in src ? (src.notes as string | null) ?? "" : "");
-    setPhotoFile(null);
+    setPhotoFile(src && "photoFile" in src ? (src.photoFile as File | null) ?? null : null);
     setPhotoPreview(null);
     setRemovePhoto(false);
     setSaveFavorite(false);
