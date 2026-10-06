@@ -7,6 +7,7 @@ import {
   BODY_FIELDS,
   emptyBodyValues,
   parseBodyScreenshot,
+  preprocessScreenshot,
   toDateTimeLocal,
   type BodyMetricValues,
 } from "@/lib/body";
@@ -70,17 +71,30 @@ export default function BodyMetricsModal({ open, onClose, onSaved, userId }: Pro
     try {
       const T = await import("tesseract.js");
       const worker = await T.createWorker("eng");
-      const { data } = await worker.recognize(file);
+      // Treat the preprocessed crop as a uniform block of text.
+      await worker.setParameters({ tessedit_pageseg_mode: T.PSM.SINGLE_BLOCK });
+      const ocrInput = await preprocessScreenshot(file);
+      const { data } = await worker.recognize(ocrInput);
       await worker.terminate();
       const parsed = parseBodyScreenshot(data.text ?? "");
       setValues(parsed.values);
+      const found = BODY_FIELDS.filter((f) => parsed.values[f.key] !== null).length;
       if (parsed.measuredAt) {
         setMeasuredAt(toDateTimeLocal(parsed.measuredAt));
+      }
+      if (found === 0) {
         setOcrInfo(
-          `Read ${BODY_FIELDS.filter((f) => parsed.values[f.key] !== null).length} values from the screenshot — verify each one before saving.`
+          "Couldn't pull numbers from that screenshot automatically — fill in the values by hand (the screenshot is still attached for reference)."
         );
       } else {
-        setOcrInfo("Couldn't read a date from the screenshot — set it manually below.");
+        setOcrInfo(
+          `Read ${found} value${found === 1 ? "" : "s"} from the screenshot — verify each one before saving.`
+        );
+        if (!parsed.measuredAt) {
+          setOcrInfo(
+            (prev) => `${prev ?? ""} Couldn't read a date — set it manually below.`
+          );
+        }
       }
       setStage("review");
     } catch {

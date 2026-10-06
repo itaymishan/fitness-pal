@@ -63,63 +63,80 @@ export function emptyBodyValues(): BodyMetricValues {
 }
 
 /** Parse OCR text of a Renpho-style body composition screenshot.
+ *  The detail rows have a fixed 3-column layout, so we anchor on each row's
+ *  label line and read the values from the line above it, positionally.
+ *  Anything unreadable stays null for the user to fill in the review.
  *  Values are best-effort — the caller shows them in an editable review. */
 export function parseBodyScreenshot(text: string): {
   measuredAt: Date | null;
   values: BodyMetricValues;
 } {
-  const norm = text.replace(/[|]/g, "I").replace(/\r/g, "\n");
+  const norm = text.replace(/\|/g, "I").replace(/\r/g, "\n");
+  const lines = norm
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
   const values = emptyBodyValues();
 
-  // Screenshots can show small deltas ("+0.25kg Weight") next to the real
-  // value — take the largest plausible match for each field.
-  function findMax(patterns: RegExp[], maxSane: number): number | null {
-    let best: number | null = null;
-    for (const re of patterns) {
-      const global = new RegExp(re.source, re.flags.includes("g") ? re.flags : re.flags + "g");
-      for (const m of norm.matchAll(global)) {
-        const v = parseFloat(m[1].replace(",", "."));
-        if (Number.isFinite(v) && v > 0 && v <= maxSane && (best === null || v > best)) {
-          best = Math.round(v * 100) / 100;
-        }
-      }
+  const numbers = (line: string): number[] => {
+    const out: number[] = [];
+    for (const m of line.matchAll(/(\d+[.,]?\d*)/g)) {
+      const v = parseFloat(m[1].replace(",", "."));
+      if (Number.isFinite(v)) out.push(Math.round(v * 100) / 100);
     }
-    return best;
+    return out;
+  };
+
+  const sane = (v: number | undefined, max: number): number | null =>
+    v !== undefined && v > 0 && v <= max ? v : null;
+
+  // label-line pattern -> [field keys in column order, per-column max sane value]
+  const rows: { label: RegExp; fields: [BodyMetricKey, number][] }[] = [
+    { label: /^\s*weight\s+bmi\s+body\s+fat/i, fields: [["weight_kg", 250], ["bmi", 80], ["body_fat_pct", 80]] },
+    { label: /fat[\s-]*free/i, fields: [["fat_free_weight_kg", 250], ["subcutaneous_fat_pct", 80], ["visceral_fat", 60]] },
+    { label: /body\s+water/i, fields: [["body_water_pct", 90], ["skeletal_muscle_pct", 80], ["muscle_mass_kg", 200]] },
+    { label: /bone\s+mass/i, fields: [["bone_mass_kg", 20], ["protein_pct", 60], ["bmr_kcal", 5000]] },
+    { label: /metabolic\s+age/i, fields: [["metabolic_age", 120]] },
+  ];
+
+  for (let i = 0; i < lines.length; i++) {
+    const row = rows.find((r) => r.label.test(lines[i]));
+    if (!row || i === 0) continue;
+    const vals = numbers(lines[i - 1]);
+    row.fields.forEach(([key, max], col) => {
+      const v = sane(vals[col], max);
+      if (v !== null) values[key] = v;
+    });
   }
 
-  const NL = String.raw`[\s]*`;
-  const kg = (label: string) =>
-    new RegExp(String.raw`([0-9]+[.,]?[0-9]*)${NL}kg${NL}${label}`, "i");
-  const pct = (label: string) =>
-    new RegExp(String.raw`([0-9]+[.,]?[0-9]*)${NL}%${NL}${label}`, "i");
-  const plain = (label: string) =>
-    new RegExp(String.raw`([0-9]+[.,]?[0-9]*)${NL}${label}`, "i");
-
-  values.fat_free_weight_kg = findMax(
-    [kg(String.raw`fat${NL}[- ]?free${NL}body${NL}weight`)],
-    250
-  );
-  values.weight_kg = findMax(
-    [new RegExp(String.raw`\+?([0-9]+[.,]?[0-9]*)${NL}kg${NL}(?!fat)(?=weight)weight`, "i")],
-    250
-  );
-  values.muscle_mass_kg = findMax([kg(String.raw`muscle${NL}mass`)], 200);
-  values.bone_mass_kg = findMax([kg(String.raw`bone${NL}mass`)], 20);
-  values.body_fat_pct = findMax([pct(String.raw`body${NL}fat`)], 80);
-  values.subcutaneous_fat_pct = findMax([pct(String.raw`subcutaneous${NL}fat`)], 80);
-  values.body_water_pct = findMax([pct(String.raw`body${NL}water`)], 90);
-  values.skeletal_muscle_pct = findMax([pct(String.raw`skeletal${NL}muscle`)], 80);
-  values.protein_pct = findMax([pct(String.raw`protein`)], 60);
-  values.bmi = findMax([plain(String.raw`bmi`)], 80);
-  values.visceral_fat = findMax([plain(String.raw`visceral${NL}fat`)], 60);
-  values.bmr_kcal = findMax(
-    [new RegExp(String.raw`([0-9]+[.,]?[0-9]*)${NL}kcal${NL}bmr`, "i")],
-    5000
-  );
-  values.metabolic_age = findMax(
-    [new RegExp(String.raw`([0-9]{1,3})${NL}metabolic${NL}age`, "i")],
-    120
-  );
+  // Fallback: label-anchored regexes for anything still missing.
+  const anchored: [BodyMetricKey, RegExp, number][] = [
+    ["weight_kg", /([0-9]+[.,]?[0-9]*)\s*kg\s*(?!fat)(?=weight)weight/i, 250],
+    ["fat_free_weight_kg", /([0-9]+[.,]?[0-9]*)\s*kg\s*fat[\s-]*free\s*body\s*weight/i, 250],
+    ["muscle_mass_kg", /([0-9]+[.,]?[0-9]*)\s*kg\s*muscle\s*mass/i, 200],
+    ["bone_mass_kg", /([0-9]+[.,]?[0-9]*)\s*kg\s*bone\s*mass/i, 20],
+    ["body_fat_pct", /([0-9]+[.,]?[0-9]*)\s*%\s*body\s*fat/i, 80],
+    ["subcutaneous_fat_pct", /([0-9]+[.,]?[0-9]*)\s*%\s*subcutaneous\s*fat/i, 80],
+    ["body_water_pct", /([0-9]+[.,]?[0-9]*)\s*%\s*body\s*water/i, 90],
+    ["skeletal_muscle_pct", /([0-9]+[.,]?[0-9]*)\s*%\s*skeletal\s*muscle/i, 80],
+    ["protein_pct", /([0-9]+[.,]?[0-9]*)\s*%\s*protein/i, 60],
+    ["bmi", /([0-9]+[.,]?[0-9]*)\s*bmi/i, 80],
+    ["visceral_fat", /([0-9]+[.,]?[0-9]*)\s*visceral\s*fat/i, 60],
+    ["bmr_kcal", /([0-9]+[.,]?[0-9]*)\s*kcal\s*bmr/i, 5000],
+    ["metabolic_age", /([0-9]{1,3})\s*metabolic\s*age/i, 120],
+  ];
+  for (const [key, re, max] of anchored) {
+    if (values[key] !== null) continue;
+    let best: number | null = null;
+    const g = new RegExp(re.source, re.flags.includes("g") ? re.flags : re.flags + "g");
+    for (const m of norm.matchAll(g)) {
+      const v = parseFloat(m[1].replace(",", "."));
+      if (Number.isFinite(v) && v > 0 && v <= max && (best === null || v > best)) {
+        best = Math.round(v * 100) / 100;
+      }
+    }
+    if (best !== null) values[key] = best;
+  }
 
   // "March 19, 2025 10:53 p.m."
   const dm = norm.match(
@@ -150,4 +167,54 @@ export function toDateTimeLocal(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
     d.getHours()
   )}:${pad(d.getMinutes())}`;
+}
+
+/**
+ * Prepare a scale-app screenshot for OCR: crop to the detail-rows area,
+ * upscale 2x, grayscale + normalize. The colored numbers on white read far
+ * better this way than raw tesseract on the full screenshot.
+ */
+export async function preprocessScreenshot(file: File): Promise<Blob> {
+  const bitmap = await createImageBitmap(file);
+  const W = bitmap.width;
+  const H = bitmap.height;
+  const cropTop = Math.round(H * 0.24);
+  const cropH = Math.round(H * 0.7);
+  const scale = 2;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(W * scale);
+  canvas.height = Math.round(cropH * scale);
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) {
+    bitmap.close();
+    return file;
+  }
+  ctx.drawImage(bitmap, 0, cropTop, W, cropH, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+
+  const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const px = img.data;
+  const lum = new Float32Array(px.length / 4);
+  let min = 255;
+  let max = 0;
+  for (let i = 0; i < lum.length; i++) {
+    const l = 0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2];
+    lum[i] = l;
+    if (l < min) min = l;
+    if (l > max) max = l;
+  }
+  const span = Math.max(1, max - min);
+  for (let i = 0; i < lum.length; i++) {
+    const v = Math.round(((lum[i] - min) / span) * 255);
+    px[i * 4] = v;
+    px[i * 4 + 1] = v;
+    px[i * 4 + 2] = v;
+  }
+  ctx.putImageData(img, 0, 0);
+
+  const blob = await new Promise<Blob | null>((res) =>
+    canvas.toBlob((b) => res(b), "image/png")
+  );
+  return blob ?? file;
 }
