@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Meal, MealItem, MealType, Profile, Favorite, DayTotals } from "./types";
+import type { BodyMetric } from "./body";
 import { EMPTY_TOTALS, addTotals, itemTotals } from "./types";
 
 export const PHOTO_BUCKET = "meal-photos";
@@ -108,6 +109,36 @@ export async function uploadPhoto(
     .upload(path, file, { contentType: file.type || "image/jpeg", upsert: false });
   if (error) throw new Error(`Photo upload failed: ${error.message}`);
   return path;
+}
+
+/** Upload a body-metric screenshot to private per-user storage; returns the path. */
+export async function uploadBodyPhoto(
+  supabase: SupabaseClient,
+  userId: string,
+  file: File
+): Promise<string> {
+  const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+  const path = `${userId}/body/${crypto.randomUUID()}.${ext}`;
+  const { error } = await supabase.storage
+    .from(PHOTO_BUCKET)
+    .upload(path, file, { contentType: file.type || "image/jpeg", upsert: false });
+  if (error) throw new Error(`Photo upload failed: ${error.message}`);
+  return path;
+}
+
+/** All body metric entries for the user, newest first. */
+export async function getBodyMetrics(
+  supabase: SupabaseClient,
+  userId: string,
+  limit = 200
+): Promise<BodyMetric[]> {
+  const { data } = await supabase
+    .from("body_metrics")
+    .select("*")
+    .eq("user_id", userId)
+    .order("measured_at", { ascending: false })
+    .limit(limit);
+  return (data ?? []) as BodyMetric[];
 }
 
 export async function deletePhoto(supabase: SupabaseClient, path: string) {
