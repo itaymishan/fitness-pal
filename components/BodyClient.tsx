@@ -43,6 +43,12 @@ const FOOD_CHOICES: { key: FoodChoice; label: string; unit: string }[] = [
 
 const RANGE_DAYS = [30, 90, 180];
 
+/** All photo paths for an entry (new array column, falling back to the legacy single column). */
+function entryPhotos(m: BodyMetric): string[] {
+  if (m.photo_urls && m.photo_urls.length > 0) return m.photo_urls;
+  return m.photo_url ? [m.photo_url] : [];
+}
+
 function prettyDT(iso: string): string {
   return new Date(iso).toLocaleString("en-US", {
     month: "short",
@@ -73,7 +79,7 @@ export default function BodyClient() {
     setUserId(user.id);
     const metrics = await getBodyMetrics(supabase, user.id);
     setEntries(metrics);
-    const paths = metrics.map((m) => m.photo_url).filter(Boolean) as string[];
+    const paths = metrics.flatMap((m) => entryPhotos(m));
     setPhotoUrls(await getSignedUrls(supabase, paths));
     const from = addDaysISO(todayISO(), -(rangeDays - 1));
     setRangeFood(await getRangeDays(supabase, user.id, from, todayISO()));
@@ -87,7 +93,9 @@ export default function BodyClient() {
 
   async function deleteEntry(entry: BodyMetric) {
     if (!confirm("Delete this measurement?")) return;
-    if (entry.photo_url) await deletePhoto(supabase, entry.photo_url).catch(() => {});
+    for (const p of entryPhotos(entry)) {
+      await deletePhoto(supabase, p).catch(() => {});
+    }
     await supabase.from("body_metrics").delete().eq("id", entry.id);
     load();
   }
@@ -263,13 +271,17 @@ export default function BodyClient() {
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    {m.photo_url && photoUrls.get(m.photo_url) && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={photoUrls.get(m.photo_url)!}
-                        alt="Screenshot"
-                        className="h-14 w-14 rounded-lg object-cover"
-                      />
+                    {entryPhotos(m).map(
+                      (p) =>
+                        photoUrls.get(p) && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            key={p}
+                            src={photoUrls.get(p)!}
+                            alt="Screenshot"
+                            className="h-14 w-14 rounded-lg object-cover"
+                          />
+                        )
                     )}
                     <button
                       onClick={() => deleteEntry(m)}

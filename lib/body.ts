@@ -17,13 +17,14 @@ export interface BodyMetric {
   protein_pct: number | null;
   bmr_kcal: number | null;
   metabolic_age: number | null;
-  photo_url: string | null;
+  photo_url: string | null; // legacy single photo (use photo_urls)
+  photo_urls: string[] | null;
   created_at: string;
 }
 
 export type BodyMetricKey = Exclude<
   keyof BodyMetric,
-  "id" | "user_id" | "measured_at" | "photo_url" | "created_at"
+  "id" | "user_id" | "measured_at" | "photo_url" | "photo_urls" | "created_at"
 >;
 
 export const BODY_FIELDS: { key: BodyMetricKey; label: string; unit: string }[] = [

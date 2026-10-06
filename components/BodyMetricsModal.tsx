@@ -21,6 +21,11 @@ interface Props {
 
 type Stage = "pick" | "ocr-running" | "review";
 
+interface Photo {
+  file: File;
+  url: string;
+}
+
 const numOrNull = (v: string): number | null => {
   const n = parseFloat(v);
   return Number.isFinite(n) ? n : null;
@@ -33,8 +38,9 @@ export default function BodyMetricsModal({ open, onClose, onSaved, userId }: Pro
   const [stage, setStage] = useState<Stage>("pick");
   const [values, setValues] = useState<BodyMetricValues>(emptyBodyValues());
   const [measuredAt, setMeasuredAt] = useState("");
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [dateTouched, setDateTouched] = useState(false);
+  const [photos, setPhotos] = useState<Photo[]>([]);
+  const [ocrProgress, setOcrProgress] = useState("");
   const [ocrInfo, setOcrInfo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -44,18 +50,19 @@ export default function BodyMetricsModal({ open, onClose, onSaved, userId }: Pro
     setStage("pick");
     setValues(emptyBodyValues());
     setMeasuredAt(toDateTimeLocal(new Date()));
-    setPhotoFile(null);
-    setPhotoPreview(null);
+    setDateTouched(false);
+    setPhotos([]);
+    setOcrProgress("");
     setOcrInfo(null);
     setError(null);
   }, [open ]);
 
   useEffect(() => {
-    if (!photoFile) return;
-    const url = URL.createObjectURL(photoFile);
-    setPhotoPreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [photoFile]);
+    return () => {
+      photos.forEach((p) => URL.revokeObjectURL(p.url));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (!open) return null;
 
@@ -63,43 +70,69 @@ export default function BodyMetricsModal({ open, onClose, onSaved, userId }: Pro
     setValues((prev) => ({ ...prev, [key]: v === "" ? null : (numOrNull(v) ?? null) }));
   }
 
-  async function handlePhoto(file: File) {
+  function removePhoto(url: string) {
+    setPhotos((prev) => {
+      const gone = prev.find((p) => p.url === url);
+      if (gone) URL.revokeObjectURL(gone.url);
+      return prev.filter((p) => p.url !== url);
+    });
+  }
+
+  async function handleFiles(list: FileList | null) {
+    if (!list || list.length === 0) return;
+    const fresh: Photo[] = [...list]
+      .filter((f) => f.type.startsWith("image/"))
+      .map((f) => ({ file: f, url: URL.createObjectURL(f) }));
+    if (fresh.length === 0) return;
+
+    setPhotos((prev) => [...prev, ...fresh]);
     setStage("ocr-running");
     setError(null);
-    setOcrInfo(null);
-    setPhotoFile(file);
+
     try {
       const T = await import("tesseract.js");
       const worker = await T.createWorker("eng");
-      // Treat the preprocessed crop as a uniform block of text.
+      // Treat each preprocessed crop as a uniform block of text.
       await worker.setParameters({ tessedit_pageseg_mode: T.PSM.SINGLE_BLOCK });
-      const ocrInput = await preprocessScreenshot(file);
-      const { data } = await worker.recognize(ocrInput);
-      await worker.terminate();
-      const parsed = parseBodyScreenshot(data.text ?? "");
-      setValues(parsed.values);
-      const found = BODY_FIELDS.filter((f) => parsed.values[f.key] !== null).length;
-      if (parsed.measuredAt) {
-        setMeasuredAt(toDateTimeLocal(parsed.measuredAt));
+
+      const merged = { ...values };
+      let foundDate: Date | null = null;
+      let readCount = 0;
+      for (let i = 0; i < fresh.length; i++) {
+        setOcrProgress(`Reading screenshot ${i + 1} of ${fresh.length}…`);
+        const ocrInput = await preprocessScreenshot(fresh[i].file);
+        const { data } = await worker.recognize(ocrInput);
+        const parsed = parseBodyScreenshot(data.text ?? "");
+        for (const f of BODY_FIELDS) {
+          if (merged[f.key] === null && parsed.values[f.key] !== null) {
+            merged[f.key] = parsed.values[f.key];
+            readCount++;
+          }
+        }
+        if (!foundDate && parsed.measuredAt) foundDate = parsed.measuredAt;
       }
-      if (found === 0) {
+      await worker.terminate();
+
+      setValues(merged);
+      if (foundDate && !dateTouched) {
+        setMeasuredAt(toDateTimeLocal(foundDate));
+      }
+      const total = BODY_FIELDS.filter((f) => merged[f.key] !== null).length;
+      if (total === 0) {
         setOcrInfo(
-          "Couldn't pull numbers from that screenshot automatically — fill in the values by hand (the screenshot is still attached for reference)."
+          "Couldn't pull numbers from the screenshots automatically — fill in the values by hand (the screenshots are still attached for reference)."
         );
       } else {
         setOcrInfo(
-          `Read ${found} value${found === 1 ? "" : "s"} from the screenshot — verify each one before saving.`
+          `Read ${total} value${total === 1 ? "" : "s"} from the screenshot${fresh.length > 1 ? "s" : ""} — verify each one before saving.`
         );
-        if (!parsed.measuredAt) {
-          setOcrInfo(
-            (prev) => `${prev ?? ""} Couldn't read a date — set it manually below.`
-          );
-        }
       }
       setStage("review");
     } catch {
-      setError("Couldn't read that screenshot — enter the values manually.");
+      setError("Couldn't read the screenshots — enter the values manually.");
       setStage("review");
+    } finally {
+      setOcrProgress("");
     }
   }
 
@@ -115,9 +148,9 @@ export default function BodyMetricsModal({ open, onClose, onSaved, userId }: Pro
     setSaving(true);
     setError(null);
     try {
-      let photoPath: string | null = null;
-      if (photoFile) {
-        photoPath = await uploadBodyPhoto(supabase, userId, photoFile);
+      const paths: string[] = [];
+      for (const p of photos) {
+        paths.push(await uploadBodyPhoto(supabase, userId, p.file));
       }
       const { error } = await supabase.from("body_metrics").insert({
         user_id: userId,
@@ -135,7 +168,7 @@ export default function BodyMetricsModal({ open, onClose, onSaved, userId }: Pro
         protein_pct: values.protein_pct,
         bmr_kcal: values.bmr_kcal,
         metabolic_age: values.metabolic_age,
-        photo_url: photoPath,
+        photo_urls: paths.length > 0 ? paths : null,
       });
       if (error) throw error;
       onSaved();
@@ -167,10 +200,10 @@ export default function BodyMetricsModal({ open, onClose, onSaved, userId }: Pro
               ref={fileRef}
               type="file"
               accept="image/*"
+              multiple
               className="hidden"
               onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) handlePhoto(f);
+                handleFiles(e.target.files);
                 e.target.value = "";
               }}
             />
@@ -178,7 +211,7 @@ export default function BodyMetricsModal({ open, onClose, onSaved, userId }: Pro
               onClick={() => fileRef.current?.click()}
               className="w-full rounded-xl bg-emerald-600 py-3 font-semibold text-white"
             >
-              📸 Upload a scale-app screenshot
+              📸 Upload scale-app screenshots
             </button>
             <button
               onClick={() => setStage("review")}
@@ -187,19 +220,21 @@ export default function BodyMetricsModal({ open, onClose, onSaved, userId }: Pro
               ⌨️ Enter values manually
             </button>
             <p className="text-xs text-gray-500">
-              The app reads the numbers and date from the screenshot — you review and fix
-              everything before saving.
+              You can select several screenshots at once — the app reads the numbers and
+              date from all of them together, and you review everything before saving.
             </p>
           </div>
         )}
 
         {stage === "ocr-running" && (
           <div className="py-10 text-center">
-            {photoPreview && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={photoPreview} alt="Screenshot" className="mx-auto mb-4 h-40 rounded-xl object-cover" />
-            )}
-            <p className="text-sm text-gray-500">Reading the screenshot…</p>
+            <div className="mb-4 flex justify-center gap-2">
+              {photos.slice(-3).map((p) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img key={p.url} src={p.url} alt="Screenshot" className="h-32 rounded-xl object-cover" />
+              ))}
+            </div>
+            <p className="text-sm text-gray-500">{ocrProgress || "Reading…"}</p>
           </div>
         )}
 
@@ -207,19 +242,40 @@ export default function BodyMetricsModal({ open, onClose, onSaved, userId }: Pro
           <div className="space-y-3">
             {ocrInfo && <p className="text-xs text-emerald-700">{ocrInfo}</p>}
             {error && <p className="text-sm text-red-600">{error}</p>}
-            {photoPreview && (
-              <div className="relative">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={photoPreview} alt="Screenshot" className="h-32 w-full rounded-xl object-cover" />
+            {photos.length > 0 && (
+              <div>
+                <div className="flex gap-2 overflow-x-auto">
+                  {photos.map((p) => (
+                    <div key={p.url} className="relative shrink-0">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={p.url} alt="Screenshot" className="h-28 rounded-xl object-cover" />
+                      <button
+                        onClick={() => removePhoto(p.url)}
+                        aria-label="Remove screenshot"
+                        className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-xs text-white"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
                 <button
-                  onClick={() => {
-                    setPhotoFile(null);
-                    setPhotoPreview(null);
-                  }}
-                  className="absolute right-2 top-2 rounded-full bg-black/60 px-4 py-2 text-xs font-medium text-white"
+                  onClick={() => fileRef.current?.click()}
+                  className="mt-2 text-sm font-medium text-emerald-700"
                 >
-                  Remove
+                  + Add another screenshot
                 </button>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    handleFiles(e.target.files);
+                    e.target.value = "";
+                  }}
+                />
               </div>
             )}
             <label className="block">
@@ -227,7 +283,10 @@ export default function BodyMetricsModal({ open, onClose, onSaved, userId }: Pro
               <input
                 type="datetime-local"
                 value={measuredAt}
-                onChange={(e) => setMeasuredAt(e.target.value)}
+                onChange={(e) => {
+                  setMeasuredAt(e.target.value);
+                  setDateTouched(true);
+                }}
                 className="mt-1 w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-emerald-600"
               />
             </label>
