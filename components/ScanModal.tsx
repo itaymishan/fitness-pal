@@ -57,6 +57,7 @@ export default function ScanModal({ open, onClose, onDone, mealType }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const readerRef = useRef<any>(null);
+  const controlsRef = useRef<{ stop: () => void } | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const scannedRef = useRef(false);
 
@@ -73,6 +74,8 @@ export default function ScanModal({ open, onClose, onDone, mealType }: Props) {
   const [ocrPhoto, setOcrPhoto] = useState<File | null>(null);
   const [ocrPreview, setOcrPreview] = useState<string | null>(null);
   const [camError, setCamError] = useState<string | null>(null);
+  const [captureError, setCaptureError] = useState<string | null>(null);
+  const [capturing, setCapturing] = useState(false);
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [ocrError, setOcrError] = useState<string | null>(null);
 
@@ -93,6 +96,7 @@ export default function ScanModal({ open, onClose, onDone, mealType }: Props) {
     setCamError(null);
     setLookupError(null);
     setOcrError(null);
+    setCaptureError(null);
     scannedRef.current = false;
     startCamera();
     return stopCamera;
@@ -101,10 +105,11 @@ export default function ScanModal({ open, onClose, onDone, mealType }: Props) {
 
   function stopCamera() {
     try {
-      readerRef.current?.stop();
+      controlsRef.current?.stop();
     } catch {
       /* noop */
     }
+    controlsRef.current = null;
     readerRef.current = null;
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
@@ -117,19 +122,22 @@ export default function ScanModal({ open, onClose, onDone, mealType }: Props) {
       const { BrowserMultiFormatReader } = await import("@zxing/browser");
       const reader = new BrowserMultiFormatReader();
       readerRef.current = reader;
-      const devices = await BrowserMultiFormatReader.listVideoInputDevices();
-      if (devices.length === 0) {
-        setCamError("No camera found on this device.");
-        return;
-      }
-      const back = devices.find((d) => /back|rear|environment/i.test(d.label)) ?? devices[devices.length - 1];
-      await reader.decodeFromVideoDevice(back.deviceId, videoRef.current!, (result: any, err: any) => {
-        if (result && !scannedRef.current) {
-          scannedRef.current = true;
-          const text = result.getText?.() ?? String(result);
-          handleBarcode(text.replace(/[^0-9]/g, ""));
+      // Pass no deviceId: the library then constrains facingMode to
+      // 'environment', i.e. the rear camera. (Picking from
+      // listVideoInputDevices() ourselves is unreliable because device
+      // labels are empty until camera permission has been granted.)
+      const controls = await reader.decodeFromVideoDevice(
+        undefined,
+        videoRef.current!,
+        (result: any) => {
+          if (result && !scannedRef.current) {
+            scannedRef.current = true;
+            const text = result.getText?.() ?? String(result);
+            handleBarcode(text.replace(/[^0-9]/g, ""));
+          }
         }
-      });
+      );
+      controlsRef.current = controls;
       streamRef.current = (videoRef.current?.srcObject as MediaStream) ?? null;
     } catch (e) {
       setCamError(
@@ -137,6 +145,31 @@ export default function ScanModal({ open, onClose, onDone, mealType }: Props) {
           ? "Camera permission was denied — allow camera access and try again."
           : "Couldn't start the camera. Check permissions and try again."
       );
+    }
+  }
+
+  /** Manual fallback: decode the current video frame on demand. */
+  async function captureFrame() {
+    const video = videoRef.current;
+    const reader = readerRef.current;
+    if (!video || !reader || video.readyState < 2 || scannedRef.current) return;
+    setCaptureError(null);
+    setCapturing(true);
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth || 1280;
+      canvas.height = video.videoHeight || 720;
+      canvas.getContext("2d")!.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const result = await reader.decodeFromCanvas(canvas);
+      if (result && !scannedRef.current) {
+        scannedRef.current = true;
+        const text = result.getText?.() ?? String(result);
+        handleBarcode(text.replace(/[^0-9]/g, ""));
+      }
+    } catch {
+      setCaptureError("No barcode in that shot — hold steady, fill the frame, and try again.");
+    } finally {
+      setCapturing(false);
     }
   }
 
@@ -266,12 +299,28 @@ export default function ScanModal({ open, onClose, onDone, mealType }: Props) {
 
         {stage === "scanning" && (
           <div>
-            <div className="overflow-hidden rounded-2xl bg-black">
-              <video ref={videoRef} playsInline muted className="aspect-[4/3] w-full object-cover" />
+            <div className="relative overflow-hidden rounded-2xl bg-black">
+              <video ref={videoRef} playsInline muted autoPlay className="aspect-[4/3] w-full object-cover" />
+              {/* viewfinder guide */}
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <div className="h-24 w-3/4 rounded-lg border-2 border-emerald-400/80" />
+              </div>
+              <div className="pointer-events-none absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-black/50 px-3 py-1.5">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
+                <span className="text-xs font-medium text-white">Scanning…</span>
+              </div>
             </div>
             <p className="mt-2 text-center text-sm text-gray-500">
-              Point the camera at the barcode — it scans automatically.
+              Point the rear camera at the barcode — it scans automatically, or tap capture.
             </p>
+            <button
+              onClick={captureFrame}
+              disabled={capturing || !!camError}
+              className="mt-3 w-full rounded-xl bg-gray-900 py-3 font-semibold text-white disabled:opacity-40"
+            >
+              {capturing ? "Reading…" : "📸 Tap to capture barcode"}
+            </button>
+            {captureError && <p className="mt-2 text-center text-xs text-amber-600">{captureError}</p>}
             {camError && (
               <div className="mt-3">
                 <p className="text-sm text-red-600">{camError}</p>
